@@ -1,0 +1,8 @@
+Flask>=2.1
+python-dotenv
+Werkzeug
+flask_sqlalchemy
+sqlalchemy
+flask-cors
+faster-whisper
+llama-cpp-python

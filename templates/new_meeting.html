@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-wrap">
+  <div class="page-header">
+    <h1>🆕 New Meeting</h1>
+    <p class="muted">Create a new meeting — fill the details and generate the report.</p>
+  </div>
+
+  <div class="card main-card">
+    <!-- Form grid -->
+    <form method="post" class="meeting-form">
+      <div class="form-grid">
+        <!-- Row 1: Meeting name (left) | Objective (right - full width textarea) -->
+        <div class="form-field">
+          <label class="form-label">Meeting Name</label>
+          <input name="name" placeholder="Name" />
+        </div>
+
+        <div class="form-field full">
+          <label class="form-label">Objective</label>
+          <textarea name="objective" rows="3" placeholder="Write the meeting objective..."></textarea>
+        </div>
+
+        <!-- Row 2: Location | Date & Time -->
+        <div class="form-field">
+          <label class="form-label">Location</label>
+          <input name="location" placeholder="e.g. Conference Room A" />
+        </div>
+
+        <div class="form-field">
+          <label class="form-label">Date & Time</label>
+          <input type="datetime-local" name="datetime" />
+        </div>
+
+        <!-- Row 3: Host | Presentees -->
+        <div class="form-field">
+          <label class="form-label">Host</label>
+          <input name="host" placeholder="Host name" />
+        </div>
+
+        <div class="form-field">
+          <label class="form-label">Presentees (comma separated)</label>
+          <input name="presentees" placeholder="Alice, Bob, Charlie" />
+        </div>
+
+        <!-- Row 4: Absentees | Agenda Items (textarea spans right column) -->
+        <div class="form-field">
+          <label class="form-label">Absentees (comma separated)</label>
+          <input name="absentees" placeholder="If any" />
+        </div>
+
+        <div class="form-field full">
+          <label class="form-label">Agenda Items</label>
+          <textarea name="agenda" rows="4" placeholder="List agenda items, one per line"></textarea>
+        </div>
+
+        <!-- Row 5: Adjournment time (left) and file upload (right) -->
+        <div class="form-field">
+          <label class="form-label">Adjournment Time</label>
+          <input name="adj_time" placeholder="e.g. 21:00" />
+        </div>
+
+        <div class="form-field">
+          <label class="form-label">Upload Audio (optional)</label>
+          <input type="file" name="audio" disabled title="Audio processing not enabled in demo">
+        </div>
+      </div>
+
+      <!-- Action row -->
+      <div class="action-row">
+        <button class="btn primary large" type="submit">Save Meeting</button>
+        <button type="button" class="btn ghost large" id="generateReportBtn">Generate Report</button>
+        <a class="btn ghost large" href="{{ url_for('download_mom') }}">Download MoM (.docx)</a>
+      </div>
+
+      <p class="muted small" style="margin-top:14px;">
+        Once you click "Generate Report" the Dashboard panels will be populated (demo).
+      </p>
+    </form>
+  </div>
+</section>
+{% endblock %}

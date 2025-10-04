@@ -1,0 +1,414 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-wrap">
+  <div class="page-header">
+    <h1>📚 Past Meetings</h1>
+    <p class="muted">View all your previous meetings in a structured format.</p>
+  </div>
+
+  <div class="card main-card">
+    {% if meetings %}
+      <!-- Inbox Format - Each meeting as a separate card -->
+      <div class="meetings-inbox">
+        {% for meeting in meetings %}
+        <div class="meeting-inbox-card">
+          <div class="meeting-header">
+            <div class="meeting-title-section">
+              <h3 class="meeting-title">📋 {{ meeting.title }}</h3>
+              <span class="meeting-date">📅 {{ meeting.date.strftime('%Y-%m-%d') }}</span>
+            </div>
+            <div class="meeting-status">
+              <span class="status-badge">📊 Meeting</span>
+            </div>
+          </div>
+          
+          <div class="meeting-content">
+            <div class="meeting-info-grid">
+              <div class="info-row">
+                <span class="info-label">👤 Host:</span>
+                <span class="info-value">{{ meeting.host or 'Not specified' }}</span>
+              </div>
+              
+              <div class="info-row">
+                <span class="info-label">📍 Location:</span>
+                <span class="info-value">{{ meeting.location or 'Not specified' }}</span>
+              </div>
+              
+              <div class="info-row">
+                <span class="info-label">✅ Present:</span>
+                <span class="info-value">{{ meeting.presentees or 'None' }}</span>
+              </div>
+              
+              <div class="info-row">
+                <span class="info-label">❌ Absent:</span>
+                <span class="info-value">{{ meeting.absentees or 'None' }}</span>
+              </div>
+              
+              <div class="info-row">
+                <span class="info-label">⏰ Adjourned:</span>
+                <span class="info-value">{{ meeting.adjournment_time or 'Not set' }}</span>
+              </div>
+              
+              <div class="info-row">
+                <span class="info-label">🕒 Created:</span>
+                <span class="info-value">{{ meeting.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+              </div>
+            </div>
+            
+            {% if meeting.summary %}
+            <div class="detail-section">
+              <h4>📝 Summary</h4>
+              <p>{{ meeting.summary }}</p>
+            </div>
+            {% endif %}
+            
+            {% if meeting.agenda %}
+            <div class="detail-section">
+              <h4>📋 Agenda</h4>
+              <p>{{ meeting.agenda }}</p>
+            </div>
+            {% endif %}
+            
+            <!-- Download Button Section -->
+            <div class="download-section">
+              <button class="download-btn" onclick="downloadMeeting('{{ meeting.id }}', '{{ meeting.title }}')">
+                📥 Download Meeting (.doc)
+              </button>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      
+      <div class="table-footer">
+        <p class="meeting-count">
+          📊 Total Meetings: <strong>{{ meetings|length }}</strong>
+        </p>
+        <a href="{{ url_for('new_meeting') }}" class="btn primary">🆕 Create New Meeting</a>
+      </div>
+    {% else %}
+      <div class="empty-state">
+        <h3>📭 No meetings yet</h3>
+        <p class="muted">You haven't created any meetings yet. Start by creating your first meeting!</p>
+        <a href="{{ url_for('new_meeting') }}" class="btn primary">🆕 Create First Meeting</a>
+      </div>
+    {% endif %}
+  </div>
+</section>
+
+<script>
+function downloadMeeting(meetingId, meetingTitle) {
+  // Create a simple .doc content structure
+  const docContent = `
+Minutes of Meeting
+
+Meeting Title: ${meetingTitle}
+Meeting ID: ${meetingId}
+Download Date: ${new Date().toLocaleDateString()}
+
+This is a placeholder for the actual meeting content.
+In a real implementation, this would contain the full meeting details
+formatted as a proper Word document.
+
+Note: This is a demo download. The actual implementation would need
+server-side processing to generate proper .doc files.
+  `;
+  
+  // Create blob and download
+  const blob = new Blob([docContent], { type: 'application/msword' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${meetingTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_meeting.doc`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+  
+  // Show success message
+  alert('Download started! Check your downloads folder.');
+}
+</script>
+
+<style>
+/* Main Container */
+.main-card {
+  padding: 20px;
+  overflow: hidden;
+}
+
+/* Inbox Format Styling */
+.meetings-inbox {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.meeting-inbox-card {
+  background: rgba(255,255,255,0.8);
+  border-radius: 12px;
+  padding: 18px;
+  border: 1px solid rgba(255,255,255,0.4);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 2px 8px rgba(31,41,55,0.06);
+  transition: all 0.2s ease;
+}
+
+.meeting-inbox-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(31,41,55,0.1);
+}
+
+.meeting-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+}
+
+.meeting-title-section {
+  flex: 1;
+}
+
+.meeting-title {
+  margin: 0 0 6px 0;
+  color: var(--primary);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.meeting-date {
+  background: var(--accent);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+.meeting-status {
+  display: flex;
+  align-items: center;
+}
+
+.status-badge {
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: white;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.meeting-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.meeting-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.info-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  background: rgba(255,255,255,0.5);
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.info-label {
+  font-weight: 600;
+  color: var(--primary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-value {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+
+.detail-section {
+  padding: 16px;
+  background: rgba(255,255,255,0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.detail-section h4 {
+  margin: 0 0 10px 0;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-section p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+  word-wrap: break-word;
+}
+
+/* Download Section */
+.download-section {
+  display: flex;
+  justify-content: center;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,0.3);
+}
+
+.download-btn {
+  background: linear-gradient(135deg, #28a745, #20c997);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(40, 167, 69, 0.3);
+}
+
+.download-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+  background: linear-gradient(135deg, #218838, #1ea085);
+}
+
+.download-btn:active {
+  transform: translateY(0);
+}
+
+/* Table Footer */
+.table-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+  padding: 16px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.meeting-count {
+  margin: 0;
+  font-size: 15px;
+  color: var(--text);
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 50px 20px;
+}
+
+.empty-state h3 {
+  color: var(--primary);
+  margin-bottom: 10px;
+}
+
+.empty-state .btn {
+  margin-top: 16px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .main-card {
+    padding: 16px;
+  }
+  
+  .meeting-inbox-card {
+    padding: 16px;
+  }
+  
+  .meeting-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  
+  .meeting-status {
+    align-self: flex-start;
+  }
+  
+  .meeting-info-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  
+  .info-row {
+    padding: 8px;
+  }
+  
+  .detail-section {
+    padding: 14px;
+  }
+  
+  .table-footer {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
+  
+  .download-btn {
+    padding: 8px 16px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-wrap {
+    padding: 10px 14px;
+  }
+  
+  .page-header h1 {
+    font-size: 22px;
+  }
+  
+  .meeting-inbox-card {
+    padding: 14px;
+  }
+  
+  .meeting-title {
+    font-size: 16px;
+  }
+  
+  .meeting-info-grid {
+    gap: 8px;
+  }
+  
+  .info-row {
+    padding: 6px;
+  }
+  
+  .detail-section {
+    padding: 12px;
+  }
+}
+</style>
+{% endblock %}

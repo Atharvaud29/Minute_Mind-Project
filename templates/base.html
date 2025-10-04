@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>MoM Manager</title>
+
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script defer src="{{ url_for('static', filename='js/main.js') }}"></script>
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- LEFT SIDEBAR -->
+    <aside class="left-nav" id="leftNav">
+      <div class="brand">
+        <div class="logo">🗂️</div>
+        <div class="brand-text">MoM Manager</div>
+      </div>
+
+      <nav class="nav-list" role="navigation" aria-label="Main">
+        <a href="#" class="nav-item section-nav" data-target="summaryPanel" id="nav-summary">
+          <span class="badge">📌</span> <span>Summary</span>
+        </a>
+
+        <a href="#" class="nav-item section-nav" data-target="tasksPanel" id="nav-tasks">
+          <span class="badge">✅</span> <span>Task - Assigned</span>
+        </a>
+
+        <a href="#" class="nav-item section-nav" data-target="conflictsPanel" id="nav-conflicts">
+          <span class="badge">⚠️</span> <span>Conflict Detection</span>
+        </a>
+      </nav>
+
+      <div class="download-box">
+        <a class="btn download" href="{{ url_for('download_mom') }}">⬇️ Download MoM (.docx)</a>
+        <p class="small muted">Click to download the sample MoM file.</p>
+      </div>
+    </aside>
+
+    <!-- MAIN AREA -->
+    <div class="main-area">
+      <header class="topbar">
+        <div class="top-left">
+          <button id="navToggle" class="nav-toggle" aria-label="Toggle nav">☰</button>
+          <div class="top-title">MoM Manager</div>
+        </div>
+        <div class="top-actions">
+          <a href="{{ url_for('dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('new_meeting') }}">New Meeting</a>
+          <a href="{{ url_for('past_meetings') }}">Past Meetings</a>
+          <a href="{{ url_for('settings') }}">Settings</a>
+        </div>
+      </header>
+
+      <main class="main-container">
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            <div class="flash">
+              {% for m in messages %}<div>{{ m }}</div>{% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+      </main>
+
+      <footer class="app-footer">© {{ (2025) }} MoM Manager — Built with ❤️</footer>
+    </div>
+  </div>
+</body>
+</html>

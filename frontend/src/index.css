@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+}
+
+@layer base {
+  body {
+    @apply bg-gradient-to-br from-brand-50 via-mint-50 to-rose-50 text-gray-900;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white rounded-xl border border-gray-200 shadow-card;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .badge-success { @apply bg-green-100 text-green-700; }
+  .badge-warn { @apply bg-amber-100 text-amber-700; }
+  .badge-info { @apply bg-brand-100 text-brand-800; }
+  .badge-low { @apply bg-mint-100 text-mint-700; }
+  .badge-medium { @apply bg-accent-100 text-accent-700; }
+  .badge-high { @apply bg-rose-100 text-rose-700; }
+}
+
+

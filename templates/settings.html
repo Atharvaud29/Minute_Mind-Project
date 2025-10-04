@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="page-wrap">
+  <div class="settings-grid">
+    <div class="card side-card">
+      <!-- Side navigation removed - navigation is now handled by the top header -->
+      <div class="side-info">
+        <h3>Quick Info</h3>
+        <p class="muted">Use the top navigation to access other pages.</p>
+      </div>
+    </div>
+
+    <div class="card main-card">
+      <h1>Settings</h1>
+      <form method="post" class="settings-form">
+        <label class="form-label">Profile Name
+          <input name="profile_name" value="Atharv">
+        </label>
+
+        <label class="form-label">Email
+          <input name="email" value="demo@domain.com">
+        </label>
+
+        <label class="form-label">Change Password
+          <input type="password" name="password" placeholder="New password">
+        </label>
+
+        <label class="form-label">Preferences
+          <textarea name="prefs" rows="4">Dark mode: off</textarea>
+        </label>
+
+        <div class="panel-actions">
+          <button class="btn primary large" type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}
