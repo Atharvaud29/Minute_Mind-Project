@@ -6,3 +6,5 @@ sqlalchemy
 flask-cors
 faster-whisper
 llama-cpp-python
+tiktoken
+dateparser

@@ -9,7 +9,9 @@ import TaskAssigned from './pages/TaskAssigned'
 import ConflictDetection from './pages/ConflictDetection'
 
 function ProtectedLayout() {
-  const isAuthed = typeof window !== 'undefined' && sessionStorage.getItem('auth') === 'true'
+  const isAuthed = typeof window !== 'undefined' && (
+    sessionStorage.getItem('auth') === 'true' || localStorage.getItem('auth') === 'true'
+  )
   const navigate = useNavigate()
   if (!isAuthed) return <Navigate to="/login" replace />
   return (
