@@ -16,3 +16,4 @@ whisper-qlora-checkpoints/
 faster-whisper/
 data/
 phi3-finetuned-Q4_K_M.gguf
+.env 

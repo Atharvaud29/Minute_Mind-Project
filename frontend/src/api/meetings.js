@@ -52,12 +52,22 @@ export const createMeeting = async (payload) => {
   return data
 }
 
-export const uploadAndTranscribe = async (file) => {
+export const uploadAndTranscribe = async (file, meetingData = {}) => {
   const form = new FormData()
   form.append('audio', file)
+  
+  // Add meeting form data if provided
+  if (meetingData.title) form.append('title', meetingData.title)
+  if (meetingData.date) form.append('date', meetingData.date)
+  if (meetingData.location) form.append('location', meetingData.location)
+  if (meetingData.host) form.append('host', meetingData.host)
+  if (meetingData.presentees) form.append('presentees', meetingData.presentees)
+  if (meetingData.absentees) form.append('absentees', meetingData.absentees)
+  if (meetingData.agenda) form.append('agenda', meetingData.agenda)
+  if (meetingData.time) form.append('adjournment_time', meetingData.time)
 
   const { data } = await http.post(
-    '/transcribe_and_summarize',
+    '/summary',  // Use summary endpoint which does everything including MoM generation
     form,
     {
       headers: { 'Content-Type': 'multipart/form-data' },

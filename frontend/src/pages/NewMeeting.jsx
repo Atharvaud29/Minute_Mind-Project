@@ -19,10 +19,14 @@ export default function NewMeeting() {
   })
   const [audioFile, setAudioFile] = useState(null)
   const [transcript, setTranscript] = useState('')
+  const [transcriptSegments, setTranscriptSegments] = useState([])
+  const [speakers, setSpeakers] = useState([])
   const [analysisResult, setAnalysisResult] = useState('')
   const [isTranscribing, setIsTranscribing] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [transcribeError, setTranscribeError] = useState('')
+  const [momFile, setMomFile] = useState(null)
+  const [meetingId, setMeetingId] = useState(null)
   const hasSavedExtractedTasksRef = useRef(false)
   const hasSavedExtractedConflictsRef = useRef(false)
 
@@ -266,11 +270,39 @@ export default function NewMeeting() {
     hasSavedExtractedConflictsRef.current = false
 
     try {
-      const res = await uploadAndTranscribe(audioFile)
-      setTranscript(res.transcript || res.text || '')
+      // Pass form data to transcribe so meeting can be created with all details
+      const res = await uploadAndTranscribe(audioFile, form)
+      
+      // Handle new speaker-segmented format
+      if (res.segments && Array.isArray(res.segments)) {
+        setTranscriptSegments(res.segments)
+        setSpeakers(res.speakers || [])
+        // Format transcript with speaker labels for display
+        const formattedTranscript = res.segments.map(seg => {
+          const speaker = seg.speaker || 'UNKNOWN'
+          const text = seg.text || ''
+          return `${speaker}: ${text}`
+        }).join('\n')
+        setTranscript(formattedTranscript)
+      } else {
+        // Fallback to old format
+        setTranscript(res.transcript || res.text || '')
+        setTranscriptSegments([])
+        setSpeakers([])
+      }
+      
       // Populate summary produced after transcription from unified endpoint
       const combined = res.analysis || res.summary || ''
       setAnalysisResult(combined)
+      
+      // Store meeting ID and MoM file info if available
+      if (res.meeting_id) {
+        setMeetingId(res.meeting_id)
+      }
+      if (res.mom_file) {
+        setMomFile(res.mom_file)
+      }
+      
       // Auto-save extracted tasks and conflicts so they appear in their pages
       saveExtractedTasks(combined)
       saveExtractedConflicts(combined)
@@ -418,9 +450,61 @@ export default function NewMeeting() {
           </div>
         )}
 
+        {speakers.length > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded p-3">
+            <p className="text-sm text-blue-800">
+              <strong>Speakers detected:</strong> {speakers.join(', ')}
+            </p>
+          </div>
+        )}
+
+        {momFile && (
+          <div className="bg-green-50 border border-green-200 rounded p-3">
+            <p className="text-sm text-green-800 mb-2">
+              <strong>✓ MoM Document Generated!</strong>
+            </p>
+            <a
+              href={`http://127.0.0.1:5000${momFile.download_url}`}
+              download
+              className="inline-block px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded"
+            >
+              📄 Download MoM Document
+            </a>
+            {momFile.filename && (
+              <p className="text-xs text-green-600 mt-2">File: {momFile.filename}</p>
+            )}
+          </div>
+        )}
+
+        {transcript && (
+          <div className="space-y-2">
+            <h3 className="font-semibold text-gray-800">Transcript:</h3>
+            <div className="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded p-3 whitespace-pre-wrap max-h-64 overflow-y-auto">
+              {transcriptSegments.length > 0 ? (
+                transcriptSegments.map((seg, idx) => (
+                  <div key={idx} className="mb-2">
+                    <span className="font-semibold text-blue-600">{seg.speaker || 'UNKNOWN'}:</span>{' '}
+                    <span className="text-gray-800">{seg.text}</span>
+                    {seg.start !== undefined && (
+                      <span className="text-xs text-gray-500 ml-2">
+                        [{Math.floor(seg.start / 60)}:{(seg.start % 60).toFixed(0).padStart(2, '0')}]
+                      </span>
+                    )}
+                  </div>
+                ))
+              ) : (
+                transcript
+              )}
+            </div>
+          </div>
+        )}
+
         {analysisResult && (
-          <div className="text-sm text-gray-700 bg-grape-50 border border-grape-200 rounded p-3 whitespace-pre-wrap">
-            {analysisResult}
+          <div className="space-y-2">
+            <h3 className="font-semibold text-gray-800">Analysis:</h3>
+            <div className="text-sm text-gray-700 bg-grape-50 border border-grape-200 rounded p-3 whitespace-pre-wrap">
+              {analysisResult}
+            </div>
           </div>
         )}
 
