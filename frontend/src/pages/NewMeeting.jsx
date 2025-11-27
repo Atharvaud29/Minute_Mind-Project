@@ -10,13 +10,14 @@ export default function NewMeeting() {
     title: '',
     summary: '',
     date: '',
-    time: '',
+    start_time: '',
+    end_time: '',
     location: '',
     host: '',
     presentees: '',
     absentees: '',
     agenda: ''
-  })
+  })  
   const [audioFile, setAudioFile] = useState(null)
   const [transcript, setTranscript] = useState('')
   const [transcriptSegments, setTranscriptSegments] = useState([])
@@ -249,7 +250,18 @@ export default function NewMeeting() {
     mutationFn: createMeeting,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['meetings'] })
-      setForm({ title: '', summary: '', date: '', time: '', location: '', host: '', presentees: '', absentees: '', agenda: '' })
+      setForm({
+        title: '',
+        summary: '',
+        date: '',
+        start_time: '',
+        end_time: '',
+        location: '',
+        host: '',
+        presentees: '',
+        absentees: '',
+        agenda: ''
+      })      
       setTranscript('')
       setAnalysisResult('')
       setAudioFile(null)
@@ -384,9 +396,17 @@ export default function NewMeeting() {
           />
           <input
             type="time"
-            value={form.time}
-            onChange={e => setForm({ ...form, time: e.target.value })}
+            value={form.start_time}
+            onChange={e => setForm({ ...form, start_time: e.target.value })}
             className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400"
+            placeholder="Start Time"
+          />
+          <input
+            type="time"
+            value={form.end_time}
+            onChange={e => setForm({ ...form, end_time: e.target.value })}
+            className="w-full border rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-400"
+            placeholder="End Time"
           />
           <input
             value={form.host}
@@ -507,20 +527,20 @@ export default function NewMeeting() {
             </div>
           </div>
         )}
-
         <button
-          disabled={isPending || !analysisResult}
+          disabled={isPending}   // <-- allow creation even without analysis
           onClick={() =>
             mutate({
               title: form.title,
-              summary: analysisResult,
+              summary: analysisResult || form.summary || "",   // fallback if no analysis
               date: form.date,
+              start_time: form.start_time,
+              end_time: form.end_time,
               location: form.location,
               host: form.host,
               presentees: form.presentees,
               absentees: form.absentees,
-              agenda: form.agenda,
-              adjournment_time: form.time
+              agenda: form.agenda
             })
           }
           className="px-4 py-2 bg-brand-600 hover:bg-brand-700 disabled:bg-gray-400 text-white rounded shadow"

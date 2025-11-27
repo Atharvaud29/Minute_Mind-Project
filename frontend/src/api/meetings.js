@@ -39,52 +39,71 @@
 //   })
 //   return { analysis: data?.text || '' }
 // }
-
 import { http } from './http'
 
+// --------------------------------------
+// FETCH MEETINGS
+// --------------------------------------
 export const fetchMeetings = async () => {
   const { data } = await http.get('/meetings')
   return data
 }
 
+// --------------------------------------
+// CREATE MEETING (Called from NewMeeting.jsx)
+// --------------------------------------
 export const createMeeting = async (payload) => {
   const { data } = await http.post('/meetings', payload)
   return data
 }
 
+// --------------------------------------
+// UPLOAD AUDIO + TRANSCRIBE + ANALYZE + GENERATE MoM
+// (Sends full meeting form data)
+// --------------------------------------
 export const uploadAndTranscribe = async (file, meetingData = {}) => {
   const form = new FormData()
   form.append('audio', file)
-  
-  // Add meeting form data if provided
+
+  // Add meeting metadata (matches backend + MoM generator)
   if (meetingData.title) form.append('title', meetingData.title)
   if (meetingData.date) form.append('date', meetingData.date)
+
+  if (meetingData.start_time) form.append('start_time', meetingData.start_time)
+  if (meetingData.end_time) form.append('end_time', meetingData.end_time)
+
   if (meetingData.location) form.append('location', meetingData.location)
   if (meetingData.host) form.append('host', meetingData.host)
   if (meetingData.presentees) form.append('presentees', meetingData.presentees)
   if (meetingData.absentees) form.append('absentees', meetingData.absentees)
   if (meetingData.agenda) form.append('agenda', meetingData.agenda)
-  if (meetingData.time) form.append('adjournment_time', meetingData.time)
+
+  // Add summary if typed by user (optional)
+  if (meetingData.summary) form.append('summary', meetingData.summary)
 
   const { data } = await http.post(
-    '/summary',  // Use summary endpoint which does everything including MoM generation
+    '/summary',       // your unified endpoint for transcription + summary + MoM
     form,
     {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 0,
+      timeout: 0,      // allow long audio
     }
   )
+
   return data
 }
 
-// Text transcript analysis (fallback)
+// --------------------------------------
+// FULL ANALYSIS OF TEXT TRANSCRIPT
+// --------------------------------------
 export const getFullAnalysis = async (transcript) => {
   console.log('Calling getFullAnalysis with transcript length:', transcript.length)
+
   const { data } = await http.post(
     '/process_transcript',
     { transcript },
-    { timeout: 300000 }
+    { timeout: 300000 }  // 5 minutes
   )
-  console.log('getFullAnalysis response:', data)
+
   return data
 }

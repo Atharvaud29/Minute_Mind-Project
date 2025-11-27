@@ -42,7 +42,8 @@ class Meeting(db.Model):
     presentees = db.Column(db.Text)
     absentees = db.Column(db.Text)
     agenda = db.Column(db.Text)
-    adjournment_time = db.Column(db.String(50))
+    start_time = db.Column(db.String(50))
+    end_time = db.Column(db.String(50))
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     key_decisions = db.Column(db.PickleType)
     mom_file_path = db.Column(db.String(500))  # Path to generated MoM file
@@ -98,12 +99,14 @@ def meeting_to_dict(m):
         "presentees": m.presentees,
         "absentees": m.absentees,
         "agenda": m.agenda,
-        "adjournment_time": m.adjournment_time,
+        # NEW FIELDS
+        "start_time": m.start_time,
+        "end_time": m.end_time,
         "created_at": m.created_at.isoformat() if m.created_at else None,
         "key_decisions": m.key_decisions if isinstance(m.key_decisions, list) else [],
-        "mom_file_path": m.mom_file_path if hasattr(m, 'mom_file_path') else None,
-        "speakers": m.speakers if hasattr(m, 'speakers') else "",
-        "transcript_segments": m.transcript_segments if hasattr(m, 'transcript_segments') else None
+        "mom_file_path": m.mom_file_path or None,
+        "speakers": m.speakers or "",
+        "transcript_segments": m.transcript_segments or None,
     }
 def task_to_dict(t):
     return {
@@ -1011,8 +1014,10 @@ Return output as JSON with keys: 'summary' and 'key_decisions'.
                         meeting.absentees = all_data["absentees"]
                     if all_data.get("agenda"):
                         meeting.agenda = all_data["agenda"]
-                    if all_data.get("adjournment_time"):
-                        meeting.adjournment_time = all_data["adjournment_time"]
+                    if all_data.get("start_time"):
+                        meeting.start_time = all_data["start_time"]
+                    if all_data.get("end_time"):
+                        meeting.end_time = all_data["end_time"]
                 else:
                     # Meeting ID provided but not found → create new
                     new_title = all_data.get("title") or f"Meeting {datetime.now(timezone.utc).isoformat()}"
@@ -1026,7 +1031,8 @@ Return output as JSON with keys: 'summary' and 'key_decisions'.
                         presentees=all_data.get("presentees", ""),
                         absentees=all_data.get("absentees", ""),
                         agenda=all_data.get("agenda", ""),
-                        adjournment_time=all_data.get("adjournment_time", ""),
+                        start_time=all_data.get("start_time", ""),
+                        end_time=all_data.get("end_time", ""),
                         transcript_segments=normalized_segments,
                         speakers=", ".join(unique_speakers)
                     )
@@ -1044,7 +1050,8 @@ Return output as JSON with keys: 'summary' and 'key_decisions'.
                     presentees=all_data.get("presentees", ""),
                     absentees=all_data.get("absentees", ""),
                     agenda=all_data.get("agenda", ""),
-                    adjournment_time=all_data.get("adjournment_time", ""),
+                    start_time=all_data.get("start_time", ""),
+                    end_time=all_data.get("end_time", ""),
                     transcript_segments=normalized_segments,
                     speakers=", ".join(unique_speakers)
                 )
@@ -1163,35 +1170,6 @@ def get_summary_data():
 # ------------------------------------------------------------------
 # 🆕 POST /api/meetings (QUICK CREATE)
 # ------------------------------------------------------------------
-@api_bp.route("/meetings", methods=["POST"])
-def create_meeting_quick():
-    """
-    Quick-create a simple meeting (no transcription).
-    """
-    data = request.get_json(silent=True) or {}
-    # Parse date
-    date_str = data.get("date")
-    meeting_date = None
-    if date_str:
-        try:
-            meeting_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
-            meeting_date = None
-    meeting = Meeting(
-        title=data.get("title"),
-        summary=data.get("summary"),
-        date=meeting_date,
-        location=data.get("location"),
-        host=data.get("host"),
-        presentees=data.get("presentees"),
-        absentees=data.get("absentees"),
-        agenda=data.get("agenda"),
-        adjournment_time=data.get("adjournment_time"),
-    )
-    db.session.add(meeting)
-    db.session.commit()
-    return jsonify(meeting_to_dict(meeting)), 201
-
 # -----------------------------
 # Meeting CRUD Endpoints
 # -----------------------------
@@ -1202,7 +1180,7 @@ def get_meetings():
 
 @api_bp.route("/meetings", methods=["POST"])
 def create_meeting():
-    """Simple meeting creation (no transcription)."""
+    """Simple meeting creation (frontend manual form, no transcription)."""
     data = request.get_json(silent=True) or {}
     # Parse date
     meeting_date = None
@@ -1220,7 +1198,9 @@ def create_meeting():
         presentees=data.get("presentees"),
         absentees=data.get("absentees"),
         agenda=data.get("agenda"),
-        adjournment_time=data.get("adjournment_time")
+        # NEW FIELDS
+        start_time=data.get("start_time"),
+        end_time=data.get("end_time")
     )
     db.session.add(meeting)
     db.session.commit()
