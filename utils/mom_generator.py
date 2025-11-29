@@ -1,128 +1,97 @@
-"""
-Minutes of Meeting (MoM) Generator
-Generates Word documents in the SAME FORMAT as the uploaded reference file.
-"""
 from docx import Document
-from datetime import datetime
+from docx.shared import Pt
 import os
+
 FILES_DIR = os.path.join(os.getcwd(), "files")
 os.makedirs(FILES_DIR, exist_ok=True)
-def generate_mom_document(meeting_data, tasks=None, conflicts=None, transcript_segments=None):
+
+def generate_mom_document(meeting_data, tasks, conflicts, transcript_segments=None):
     """
-    Generate MoM in EXACT structure of user-provided sample.
+    Generate MoM DOCX with:
+    - Meeting Details
+    - Summary
+    - Action Items (Tasks)
+    - Conflicts (if any)
     """
-    if tasks is None:
-        tasks = []
-    if conflicts is None:
-        conflicts = []
 
-    document = Document()
-    # -------------------------------------------------
-    # HEADER TITLE
-    # -------------------------------------------------
-    document.add_heading("Minutes of Meeting (MoM)", level=0)
-    # -------------------------------------------------
-    # BASIC DETAILS
-    # -------------------------------------------------
-    document.add_paragraph(f"Meeting Name: {meeting_data.title or 'N/A'}")
-    document.add_paragraph(f"Meeting Host: {meeting_data.host or 'N/A'}")
-    # -------------------------------------------------
-    # PRESENT MEMBERS
-    # -------------------------------------------------
-    present = getattr(meeting_data, "presentees", "") or ""
-    present_list = [p.strip() for p in present.split(",") if p.strip()]
-    document.add_paragraph("\nPresent Members:")
-    if present_list:
-        for person in present_list:
-            document.add_paragraph(f"{person}", style="List Bullet")
+    doc = Document()
+
+    # Main Title
+    title = doc.add_heading("Minutes of Meeting (MoM)", level=1)
+    title.alignment = 1
+
+    # -----------------------------
+    # MEETING DETAILS
+    # -----------------------------
+    doc.add_paragraph(f"Meeting Name: {meeting_data.title}")
+    doc.add_paragraph(f"Meeting Host: {meeting_data.host}")
+
+    doc.add_paragraph("Present Members:")
+    if meeting_data.presentees:
+        for p in meeting_data.presentees.split(","):
+            doc.add_paragraph(f"    • {p.strip()}")
     else:
-        document.add_paragraph("None", style="List Bullet")
-    # -------------------------------------------------
-    # ABSENT MEMBERS
-    # -------------------------------------------------
-    absent = getattr(meeting_data, "absentees", "") or ""
-    absent_list = [a.strip() for a in absent.split(",") if a.strip()]
-    document.add_paragraph("\nAbsent Members:")
-    if absent_list:
-        for person in absent_list:
-            document.add_paragraph(f"{person}", style="List Bullet")
+        doc.add_paragraph("    • Not Provided")
+
+    doc.add_paragraph("\nAbsent Members:")
+    if meeting_data.absentees:
+        for p in meeting_data.absentees.split(","):
+            doc.add_paragraph(f"    • {p.strip()}")
     else:
-        document.add_paragraph("None", style="List Bullet")
-    # -------------------------------------------------
-    # DATE & TIME
-    # -------------------------------------------------
-    meeting_date = (
-        meeting_data.date.strftime("%d %B %Y") if meeting_data.date else "N/A"
-    )
-    time_range = "N/A"
-    if hasattr(meeting_data, "start_time") and hasattr(meeting_data, "end_time"):
-        if meeting_data.start_time and meeting_data.end_time:
-            time_range = f"{meeting_data.start_time} – {meeting_data.end_time} (IST)"
-    document.add_paragraph(f"\nDate of Meeting: {meeting_date}")
-    document.add_paragraph(f"Time: {time_range}")
+        doc.add_paragraph("    • None")
 
-    # -------------------------------------------------
-    # AGENDA → SUMMARY OF MEETING
-    # -------------------------------------------------
-    document.add_paragraph("\nAgenda → Summary of Meeting :")
+    doc.add_paragraph(f"\nDate of Meeting: {meeting_data.date}")
+    doc.add_paragraph(f"Time: {meeting_data.start_time or ''} – {meeting_data.end_time or ''} (IST)")
 
-    # If transcript_segments exists, use it as summary (like sample)
-    if transcript_segments:
-        for seg in transcript_segments:
-            text = seg.get("text") if isinstance(seg, dict) else str(seg)
-            if text:
-                document.add_paragraph(f"\t• {text}", style="List Bullet")
+    # -----------------------------
+    # SUMMARY SECTION
+    # -----------------------------
+    doc.add_heading("Agenda → Summary of Meeting :", level=2)
+
+    if meeting_data.summary:
+        # Split into bullet points if possible
+        points = [
+            s.strip() for s in meeting_data.summary.replace("\n", " ").split(".")
+            if s.strip()
+        ]
+        for p in points:
+            doc.add_paragraph(f"    • {p}")
     else:
-        # fallback: use meeting_data.summary if exists
-        if hasattr(meeting_data, "summary") and meeting_data.summary:
-            for line in meeting_data.summary.split("\n"):
-                if line.strip():
-                    document.add_paragraph(f"\t• {line.strip()}", style="List Bullet")
-        else:
-            document.add_paragraph("\t• No summary available.", style="List Bullet")
+        doc.add_paragraph("    • No summary available.")
 
-    # -------------------------------------------------
-    # ACTION ITEMS → TASKS ASSIGNED
-    # -------------------------------------------------
-    document.add_paragraph("\nAction Items → Tasks Assigned :")
+    # -----------------------------
+    # TASKS SECTION
+    # -----------------------------
+    doc.add_heading("Action Items → Tasks Assigned :", level=2)
 
     if tasks:
-        for task in tasks:
-            assigned_to = getattr(task, "assigned_to", None) or getattr(task, "person", "") or "N/A"
-            description = getattr(task, "description", None) or getattr(task, "task", "") or "N/A"
-            status = getattr(task, "status", "") or "Pending"
-
-            document.add_paragraph(
-                f"\t• {assigned_to} → {description}. ({status})",
-                style="List Bullet",
-            )
+        for t in tasks:
+            person = t.person or "Unknown"
+            task_text = t.task or "Unnamed Task"
+            status = t.status or "Pending"
+            doc.add_paragraph(f"    • {person} → {task_text}. ({status})")
     else:
-        document.add_paragraph("\t• No tasks assigned.", style="List Bullet")
+        doc.add_paragraph("    • No tasks assigned.")
 
-    # -------------------------------------------------
-    # CONFLICTS / ISSUES
-    # -------------------------------------------------
-    document.add_paragraph("\nConflicts / Issues Raised :")
+    # -----------------------------
+    # CONFLICTS SECTION
+    # -----------------------------
+    doc.add_heading("Conflicts / Issues Raised :", level=2)
+
     if conflicts:
         for c in conflicts:
-            issue = getattr(c, "issue", "") or "N/A"
-            raised_by = getattr(c, "raised_by", "") or "Unknown"
-            severity = getattr(c, "severity", "") or "Medium"
-
-            document.add_paragraph(
-                f"\t• {issue} — raised by {raised_by} (Severity: {severity})",
-                style="List Bullet",
-            )
+            issue = c.issue or "No issue description"
+            raised_by = c.raised_by or "Unknown"
+            sev = c.severity
+            doc.add_paragraph(f"    • {issue} → Raised By: {raised_by}  (Severity: {sev})")
     else:
-        document.add_paragraph("\t• No conflicts reported.", style="List Bullet")
+        doc.add_paragraph("    • No conflicts reported.")
 
-    # -------------------------------------------------
+    # -----------------------------
     # SAVE FILE
-    # -------------------------------------------------
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_name = f"MoM_{meeting_data.id}_{timestamp}.docx"
-    file_path = os.path.join(FILES_DIR, file_name)
+    # -----------------------------
+    filename = f"MoM_{meeting_data.id}.docx"
+    filepath = os.path.join(FILES_DIR, filename)
+    doc.save(filepath)
 
-    document.save(file_path)
-    return file_path
-
+    return filepath

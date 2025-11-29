@@ -327,45 +327,157 @@ textarea:focus, input:focus, select:focus {
   .left-stack { width: auto; }
 }
 
-/* ---------- New Meeting form spacing & layout ---------- */
-.page-wrap{padding:18px 24px}
-.page-header h1{font-size:28px;margin:0 0 6px}
-.page-header .muted{color:var(--muted);margin-bottom:14px}
+/* ---------- NEW MODERN MEETING PAGE UI (UPGRADED) ---------- */
 
-/* Keep forms inside cards visually distinct */
-.main-card{padding:22px;border-radius:14px;}
+/* Page container spacing */
+.page-wrap {
+  padding: 24px 32px;
+}
 
-/* Grid layout: 2 columns with gap, full fields span both columns */
-.form-grid{
-  display:grid;
+/* Header block */
+.page-header {
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  padding: 28px;
+  border-radius: 22px;
+  color: #fff;
+  margin-bottom: 22px;
+  box-shadow: 0 10px 25px rgba(16,185,129,0.25);
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.page-header .muted {
+  color: rgba(255,255,255,0.85);
+  margin-top: 6px;
+  font-size: 15px;
+}
+
+/* The form card */
+.main-card {
+  padding: 32px;
+  border-radius: 22px;
+  background: var(--surface);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,0.45);
+  box-shadow: var(--card-shadow);
+}
+
+/* Grid */
+.form-grid {
+  display: grid;
   grid-template-columns: 1fr 1fr;
-  gap:18px;
-  align-items:start;
+  gap: 22px;
 }
 
-/* A field container */
-.form-field{display:flex;flex-direction:column;gap:8px}
-
-/* Full width span */
-.form-field.full{grid-column:1 / -1}
-
-/* Labels and inputs */
-.form-label{font-weight:700;font-size:15px;color:var(--text)}
-input[type="text"], input[type="email"], input[type="password"], input[type="datetime-local"], input[type="file"], input, select {
-  width:100%;padding:12px;border-radius:10px;border:1px solid rgba(6,22,23,0.06);font-size:15px;background:#fff;
-}
-textarea{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(6,22,23,0.06);resize:vertical;font-size:15px}
-
-/* Action row: buttons spacing & layout */
-.action-row{display:flex;gap:12px;align-items:center;margin-top:16px}
-.action-row .btn{min-width:150px}
-
-/* Small screens: single column form */
-@media (max-width:900px){
-  .form-grid{grid-template-columns: 1fr;gap:14px}
-  .action-row{flex-direction:column;align-items:stretch}
-  .left-nav{display:none} /* keep behaviour if sidebar collapses on small screens */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-/* subtle focus states */
-input:focus, textarea:focus, select:focus{outline:none;box-shadow:0 6px 18px rgba(16,185,129,0.08);border-color:var(--accent)}
+/* Full width items */
+.form-field.full {
+  grid-column: 1 / -1;
+}
+
+/* Label Styling */
+.form-label {
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--accent);
+}
+
+/* Inputs & Textareas */
+input,
+textarea,
+select {
+  width: 100%;
+  padding: 14px;
+  font-size: 15px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(255,255,255,0.95);
+  transition: all .25s ease;
+  box-shadow: 0 2px 6px rgba(15,23,42,0.04);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(16,185,129,0.25);
+}
+
+/* File input */
+input[type="file"] {
+  padding: 10px;
+  background: rgba(255,255,255,0.85);
+  border-radius: 14px;
+}
+
+/* Action Buttons Row */
+.action-row {
+  display: flex;
+  gap: 16px;
+  margin-top: 24px;
+  align-items: center;
+}
+
+/* Primary Button */
+.btn.primary.large {
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  color: #fff;
+  padding: 14px 22px;
+  font-size: 16px;
+  border-radius: 14px;
+  font-weight: 800;
+  box-shadow: 0 10px 25px rgba(16,185,129,0.25);
+  transition: all 0.25s ease;
+}
+
+.btn.primary.large:hover {
+  transform: translateY(-3px);
+  opacity: 0.95;
+}
+
+/* Ghost Button */
+.btn.ghost.large {
+  background: rgba(255,255,255,0.75);
+  border: 1px solid rgba(15,23,42,0.12);
+  color: var(--primary);
+  padding: 14px 22px;
+  font-size: 16px;
+  border-radius: 14px;
+  font-weight: 700;
+  transition: all 0.25s ease;
+}
+
+.btn.ghost.large:hover {
+  background: rgba(16,185,129,0.1);
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+/* Small muted text */
+.muted.small {
+  color: var(--muted);
+  margin-top: 14px;
+}
+
+/* Responsive Layout */
+@media (max-width: 900px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

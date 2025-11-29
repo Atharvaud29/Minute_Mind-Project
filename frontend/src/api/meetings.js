@@ -39,71 +39,124 @@
 //   })
 //   return { analysis: data?.text || '' }
 // }
-import { http } from './http'
+// import { http } from './http'
 
-// --------------------------------------
-// FETCH MEETINGS
-// --------------------------------------
+// // --------------------------------------
+// // FETCH MEETINGS
+// // --------------------------------------
+// export const fetchMeetings = async () => {
+//   const { data } = await http.get('/meetings')
+//   return data
+// }
+
+// // --------------------------------------
+// // CREATE MEETING (Called from NewMeeting.jsx)
+// // --------------------------------------
+// export const createMeeting = async (payload) => {
+//   const { data } = await http.post('/meetings', payload)
+//   return data
+// }
+
+// // --------------------------------------
+// // UPLOAD AUDIO + TRANSCRIBE + ANALYZE + GENERATE MoM
+// // (Sends full meeting form data)
+// // --------------------------------------
+// export const uploadAndTranscribe = async (file, meetingData = {}) => {
+//   const form = new FormData()
+//   form.append('audio', file)
+
+//   // Add meeting metadata (matches backend + MoM generator)
+//   if (meetingData.title) form.append('title', meetingData.title)
+//   if (meetingData.date) form.append('date', meetingData.date)
+
+//   if (meetingData.start_time) form.append('start_time', meetingData.start_time)
+//   if (meetingData.end_time) form.append('end_time', meetingData.end_time)
+
+//   if (meetingData.location) form.append('location', meetingData.location)
+//   if (meetingData.host) form.append('host', meetingData.host)
+//   if (meetingData.presentees) form.append('presentees', meetingData.presentees)
+//   if (meetingData.absentees) form.append('absentees', meetingData.absentees)
+//   if (meetingData.agenda) form.append('agenda', meetingData.agenda)
+
+//   // Add summary if typed by user (optional)
+//   if (meetingData.summary) form.append('summary', meetingData.summary)
+
+//   const { data } = await http.post(
+//     '/summary',       // your unified endpoint for transcription + summary + MoM
+//     form,
+//     {
+//       headers: { 'Content-Type': 'multipart/form-data' },
+//       timeout: 0,      // allow long audio
+//     }
+//   )
+
+//   return data
+// }
+
+// // --------------------------------------
+// // FULL ANALYSIS OF TEXT TRANSCRIPT
+// // --------------------------------------
+// export const getFullAnalysis = async (transcript) => {
+//   console.log('Calling getFullAnalysis with transcript length:', transcript.length)
+
+//   const { data } = await http.post(
+//     '/process_transcript',
+//     { transcript },
+//     { timeout: 300000 }  // 5 minutes
+//   )
+
+//   return data
+// }
+import { http } from "./http";
+
+/* ============================================================
+   FETCH ALL MEETINGS
+   ============================================================ */
 export const fetchMeetings = async () => {
-  const { data } = await http.get('/meetings')
-  return data
-}
+  const { data } = await http.get("/meetings");
+  return data;
+};
 
-// --------------------------------------
-// CREATE MEETING (Called from NewMeeting.jsx)
-// --------------------------------------
+/* ============================================================
+   CREATE MEETING (NO AUDIO)
+   ============================================================ */
 export const createMeeting = async (payload) => {
-  const { data } = await http.post('/meetings', payload)
-  return data
-}
+  const { data } = await http.post("/meetings", payload);
+  return data;
+};
 
-// --------------------------------------
-// UPLOAD AUDIO + TRANSCRIBE + ANALYZE + GENERATE MoM
-// (Sends full meeting form data)
-// --------------------------------------
-export const uploadAndTranscribe = async (file, meetingData = {}) => {
-  const form = new FormData()
-  form.append('audio', file)
+/* ============================================================
+   UPLOAD AUDIO → TRANSCRIBE → SUMMARY → TASKS → CONFLICTS → MoM
+   (Unified backend endpoint: /api/transcribe_and_summarize)
+   ============================================================ */
 
-  // Add meeting metadata (matches backend + MoM generator)
-  if (meetingData.title) form.append('title', meetingData.title)
-  if (meetingData.date) form.append('date', meetingData.date)
+   export const uploadAndTranscribe = async (file, form) => {
+    const formData = new FormData();
+    formData.append("audio", file);
+  
+    Object.entries(form).forEach(([k, v]) => {
+      if (v) formData.append(k, v);
+    });
+  
+    const res = await fetch("http://127.0.0.1:5000/api/transcribe_and_summarize", {
+      method: "POST",
+      body: formData,
+    });
+  
+    return await res.json();   // ✅ DO NOT wrap/modify the object
+  };
+  
 
-  if (meetingData.start_time) form.append('start_time', meetingData.start_time)
-  if (meetingData.end_time) form.append('end_time', meetingData.end_time)
-
-  if (meetingData.location) form.append('location', meetingData.location)
-  if (meetingData.host) form.append('host', meetingData.host)
-  if (meetingData.presentees) form.append('presentees', meetingData.presentees)
-  if (meetingData.absentees) form.append('absentees', meetingData.absentees)
-  if (meetingData.agenda) form.append('agenda', meetingData.agenda)
-
-  // Add summary if typed by user (optional)
-  if (meetingData.summary) form.append('summary', meetingData.summary)
-
-  const { data } = await http.post(
-    '/summary',       // your unified endpoint for transcription + summary + MoM
-    form,
-    {
-      headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 0,      // allow long audio
-    }
-  )
-
-  return data
-}
-
-// --------------------------------------
-// FULL ANALYSIS OF TEXT TRANSCRIPT
-// --------------------------------------
+/* ============================================================
+   FULL TEXT ANALYSIS (NOT USED OFTEN NOW)
+   (Still calling /api/process_transcript)
+   ============================================================ */
 export const getFullAnalysis = async (transcript) => {
-  console.log('Calling getFullAnalysis with transcript length:', transcript.length)
-
   const { data } = await http.post(
-    '/process_transcript',
+    "/process_transcript",
     { transcript },
-    { timeout: 300000 }  // 5 minutes
-  )
+    { timeout: 300000 } // 5 minutes
+  );
 
-  return data
-}
+  return data;
+};

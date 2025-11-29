@@ -676,470 +676,574 @@ Transcript:
         return jsonify({"error": str(e)}), 500
 
 # -----------------------------
-# Unified endpoint for frontend
+# Helper: find or create meeting by provided fields
 # -----------------------------
+def find_meeting_by_details(all_data):
+    """
+    Best-effort lookup: match by title + date + host.
+    Title and host must match (case-insensitive). If date present, require date match too.
+    Returns Meeting instance or None.
+    """
+    title = (all_data.get("title") or "").strip()
+    host = (all_data.get("host") or "").strip()
+    date_val = None
+    if all_data.get("date"):
+        try:
+            date_val = datetime.strptime(all_data["date"], "%Y-%m-%d").date()
+        except Exception:
+            date_val = None
+
+    q = Meeting.query
+    if title:
+        q = q.filter(Meeting.title.ilike(f"%{title}%"))
+    if host:
+        q = q.filter(Meeting.host.ilike(f"%{host}%"))
+    candidates = q.order_by(Meeting.created_at.desc()).all()
+
+    if not candidates:
+        return None
+
+    # If date provided, prefer exact date match
+    if date_val:
+        for m in candidates:
+            if m.date == date_val:
+                return m
+    # fallback: return most recent candidate
+    return candidates[0]
+
+def create_meeting_from_data(all_data, summary, normalized_segments, unique_speakers):
+    """
+    Create a Meeting record using provided fields and return it (committed).
+    """
+    meeting_date = date.today()
+    if all_data.get("date"):
+        try:
+            meeting_date = datetime.strptime(all_data["date"], "%Y-%m-%d").date()
+        except Exception:
+            meeting_date = date.today()
+    new_title = all_data.get("title") or f"Meeting {datetime.now(timezone.utc).isoformat()}"
+    meeting = Meeting(
+        title=new_title,
+        summary=summary,
+        key_decisions=[],
+        date=meeting_date,
+        location=all_data.get("location", ""),
+        host=all_data.get("host", ""),
+        presentees=all_data.get("presentees", ""),
+        absentees=all_data.get("absentees", ""),
+        agenda=all_data.get("agenda", ""),
+        start_time=all_data.get("start_time", "") if all_data.get("start_time") else None,
+        end_time=all_data.get("end_time", "") if all_data.get("end_time") else None,
+        transcript_segments=normalized_segments,
+        speakers=", ".join(unique_speakers)
+    )
+    db.session.add(meeting)
+    db.session.commit()
+    return meeting
+
+
 @api_bp.route("/transcribe_and_summarize", methods=["POST"])
 def transcribe_and_summarize():
     if "audio" not in request.files:
         return jsonify({"error": "audio file missing"}), 400
+
     audio_file = request.files["audio"]
     if not audio_file.filename:
         return jsonify({"error": "empty filename"}), 400
+
     audio_path = None
+
     try:
-        # --------------------------------------------------------
-        # STEP 1 — SAVE THE TEMP AUDIO FILE
-        # --------------------------------------------------------
+        # ---------------------------------------------------
+        # STEP 1 — Save uploaded audio temporarily
+        # ---------------------------------------------------
         with NamedTemporaryFile(delete=False, suffix=os.path.splitext(secure_filename(audio_file.filename))[1]) as tmp:
             audio_path = tmp.name
             audio_file.save(audio_path)
-        # --------------------------------------------------------
-        # STEP 2 — TRANSCRIBE USING FASTER-WHISPER (WINDOWS SAFE)
-        # --------------------------------------------------------
-        print("Transcribing with Faster-Whisper...")
-        result = transcribe_audio_faster_whisper(audio_path)
-        # Temporal normalization (unchanged)
-        from utils.temporal_normalization import normalize_temporal_segments
-        normalized_segments = normalize_temporal_segments(result["segments"], merge_threshold=0.5)
-        # Speaker transcript (Faster-Whisper = UNKNOWN speaker)
-        speaker_transcript = ""
-        for seg in normalized_segments:
-            spk = seg.get("speaker", "UNKNOWN")
-            txt = seg.get("text", "")
-            speaker_transcript += f"{spk}: {txt}\n"
-        full_transcript = result["full_text"]
-        unique_speakers = list(set(seg.get("speaker", "UNKNOWN") for seg in normalized_segments))
-        # --------------------------------------------------------
-        # STEP 3 — GENERATE SUMMARY USING PHI-3 LLM
-        # --------------------------------------------------------
-        llm = get_phi3_model()
-        MAX_CHARS = 3000
-        def chunk_text(text, max_chars=MAX_CHARS):
-            return [text[i:i + max_chars] for i in range(0, len(text), max_chars)]
-        transcript_chunks = chunk_text(speaker_transcript)
-        chunk_summaries = []
-        for chunk in transcript_chunks:
-            prompt = f"""
-Summarize the following meeting transcript in 5-6 sentences. Note the speaker labels:
 
-{chunk}
-"""
-            out = llm(prompt=prompt, max_tokens=1024, temperature=0.4)
-            chunk_text_out = ""
-            if isinstance(out, dict):
-                chunk_text_out = (
-                    out.get("choices", [{}])[0].get("text")
-                    or out.get("text")
-                    or ""
-                )
-            else:
-                chunk_text_out = str(out)
-            chunk_text_out = chunk_text_out.strip()
-            if chunk_text_out:
-                chunk_summaries.append(chunk_text_out)
-        summary = " ".join(chunk_summaries)
-        # --------------------------------------------------------
-        # STEP 4 — CREATE MEETING (if form fields provided)
-        # --------------------------------------------------------
-        meeting_id_created = None
-        mom_file_info = None
-        try:
-            form_data = request.form if request.form else {}
-            json_data = request.get_json(silent=True) or {}
-            all_data = {**form_data, **json_data}
-            if all_data.get("title") or all_data.get("location") or all_data.get("host"):
-                # Parse meeting date
-                meeting_date = date.today()
-                if all_data.get("date"):
-                    try:
-                        meeting_date = datetime.strptime(all_data["date"], "%Y-%m-%d").date()
-                    except:
-                        pass
-                # Create meeting record
-                meeting = Meeting(
-                    title=all_data.get("title", f"Meeting {datetime.now(timezone.utc).isoformat()}"),
-                    summary=summary,
-                    key_decisions=[],
-                    date=meeting_date,
-                    location=all_data.get("location", ""),
-                    host=all_data.get("host", ""),
-                    presentees=all_data.get("presentees", ""),
-                    absentees=all_data.get("absentees", ""),
-                    agenda=all_data.get("agenda", ""),
-                    adjournment_time=all_data.get("adjournment_time", ""),
-                    transcript_segments=normalized_segments,
-                    speakers=", ".join(unique_speakers)
-                )
-                db.session.add(meeting)
-                db.session.commit()
-                meeting_id_created = meeting.id
-                # --------------------------------------------------------
-                # STEP 5 — TASK + CONFLICT EXTRACTION
-                # --------------------------------------------------------
-                process_result = process_transcript_internal(speaker_transcript, llm)
-                extracted_tasks = process_result.get("tasks", [])
-                extracted_conflicts = process_result.get("conflicts", [])
-                for t in extracted_tasks:
-                    task_obj = Task(
-                        person=t.get("assigned_to", "Unassigned"),
-                        task=t.get("task_name", "Untitled Task"),
-                        deadline=t.get("due_date", "Not Mentioned"),
-                        status=t.get("status", "Pending"),
-                        notes="",
-                        meeting_id=meeting_id_created
-                    )
-                    db.session.add(task_obj)
-                for c in extracted_conflicts:
-                    participants_str = ", ".join(c.get("participants", [])) \
-                        if isinstance(c.get("participants"), list) else str(c.get("participants", ""))
-                    stance_str = json.dumps(c.get("stance", "")) \
-                        if isinstance(c.get("stance"), dict) else str(c.get("stance", ""))
-                    conflict_obj = Conflict(
-                        issue=c.get("issue", "") or "",
-                        raised_by=c.get("raised_by", "") or "",
-                        resolution="",
-                        severity=c.get("severity", "Medium"),
-                        participants=participants_str,
-                        stance=stance_str,
-                        topic=c.get("topic", ""),
-                        meeting_id=meeting_id_created
-                    )
-                    db.session.add(conflict_obj)
-                db.session.commit()
-                # --------------------------------------------------------
-                # STEP 6 — GENERATE MOM DOCUMENT
-                # --------------------------------------------------------
-                try:
-                    from utils.mom_generator import generate_mom_document
-                    meeting_tasks = Task.query.filter_by(meeting_id=meeting_id_created).all()
-                    meeting_conflicts = Conflict.query.filter_by(meeting_id=meeting_id_created).all()
-                    mom_file_path = generate_mom_document(
-                        meeting_data=meeting,
-                        tasks=meeting_tasks,
-                        conflicts=meeting_conflicts,
-                        transcript_segments=normalized_segments
-                    )
-                    meeting.mom_file_path = mom_file_path
-                    db.session.commit()
-                    filename = os.path.basename(mom_file_path)
-                    mom_file_info = {
-                        "path": mom_file_path,
-                        "download_url": f"/api/download/{filename}",
-                        "filename": filename
-                    }
-                except Exception as e:
-                    print(f"Warning: MoM generation failed: {e}")
-                    traceback.print_exc()
-        except Exception as e:
-            print(f"Warning: Meeting creation failed: {e}")
-            traceback.print_exc()
-        # --------------------------------------------------------
-        # FINAL RESPONSE
-        # --------------------------------------------------------
-        response_data = {
-            "transcript": full_transcript,
-            "summary": summary,
-            "segments": normalized_segments,
-            "speakers": unique_speakers
-        }
-        if meeting_id_created:
-            response_data["meeting_id"] = meeting_id_created
-        if mom_file_info:
-            response_data["mom_file"] = mom_file_info
-        return jsonify(response_data)
-    except Exception as e:
-        traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
-    finally:
-        if audio_path and os.path.exists(audio_path):
-            try:
-                os.remove(audio_path)
-            except:
-                pass
-
-# -----------------------------
-# Meeting Summary + Key Decisions Endpoint (POST)
-# -----------------------------
-@api_bp.route("/summary", methods=["POST"])
-def summary():
-    if "audio" not in request.files:
-        return jsonify({"error": "audio file missing"}), 400
-    audio_file = request.files["audio"]
-    if not audio_file.filename:
-        return jsonify({"error": "empty filename"}), 400
-    audio_path = None
-    try:
-        # Step 1: Save temp audio file
-        with NamedTemporaryFile(delete=False, suffix=os.path.splitext(secure_filename(audio_file.filename))[1]) as tmp:
-            audio_path = tmp.name
-            audio_file.save(audio_path)
-        # Step 2: Transcribe audio with WhisperX (speaker diarization)
-        print("Transcribing with Faster-Whisper...")
+        # ---------------------------------------------------
+        # STEP 2 — Transcribe using Faster-Whisper
+        # ---------------------------------------------------
         result = transcribe_audio_faster_whisper(audio_path)
-        # Normalize segments (keep your existing behavior)
+
         from utils.temporal_normalization import normalize_temporal_segments
         normalized_segments = normalize_temporal_segments(
-            result["segments"],
-            merge_threshold=0.5
+            result["segments"], merge_threshold=0.5
         )
-        # Build labeled transcript for LLM
-        speaker_transcript = ""
-        for seg in normalized_segments:
-            speaker = seg.get("speaker", "UNKNOWN")
-            text = seg.get("text", "")
-            speaker_transcript += f"{speaker}: {text}\n"
+        # Build usable transcript (speaker-based)
+        speaker_transcript = "\n".join([
+            f"{seg.get('speaker')}: {seg.get('text')}" for seg in normalized_segments if seg.get("text")
+        ])
         full_transcript = result["full_text"]
-        unique_speakers = list(set(seg.get("speaker", "UNKNOWN") for seg in normalized_segments
-        ))
-        # Step 3: Generate summary and key decisions using Phi-3
+        # 🔥 Restore missing unique_speakers
+        unique_speakers = list(set(seg.get("speaker") for seg in normalized_segments))
+        # 🔥 If all speakers are UNKNOWN → force fallback
+        if all(seg.get("speaker") == "UNKNOWN" for seg in normalized_segments):
+            speaker_transcript = full_transcript
+        # 🔥 FIX: If speaker transcript is empty, fallback before extraction
+        if not speaker_transcript.strip():
+            speaker_transcript = full_transcript or ""
+
+        # ---------------------------------------------------
+        # STEP 3 — Extract tasks & conflicts first (so fallback summary can use them)
+        # ---------------------------------------------------
         llm = get_phi3_model()
-        MAX_CHARS = 3000
-        def chunk_text(text, max_chars=MAX_CHARS):
-            return [text[i:i+max_chars] for i in range(0, len(text), max_chars)]
-        transcript_chunks = chunk_text(speaker_transcript)
-        summaries, decisions = [], []
-        for chunk in transcript_chunks:
+        extraction = process_transcript_internal(speaker_transcript, llm)
+        extracted_tasks = extraction.get("tasks", [])
+        extracted_conflicts = extraction.get("conflicts", [])
+
+        # Normalize tasks early (so summary fallback can use them)
+        normalized_tasks = []
+        for t in extracted_tasks:
+            normalized_tasks.append({
+                "task_name": t.get("task_name") or t.get("task") or "",
+                "assigned_to": t.get("assigned_to") or "",
+                "due_date": t.get("due_date") or "",
+                "status": t.get("status", "Pending")
+            })
+        extracted_tasks = [t for t in normalized_tasks if t["task_name"]]
+
+        # Normalize conflicts early
+        normalized_conflicts = []
+        for c in extracted_conflicts:
+            normalized_conflicts.append({
+                "issue": c.get("issue", ""),
+                "raised_by": c.get("raised_by", ""),
+                "participants": c.get("participants", []),
+                "severity": c.get("severity", "Medium"),
+                "resolution": c.get("resolution", ""),
+                "stance": c.get("stance", ""),
+                "topic": c.get("topic", "")
+            })
+        extracted_conflicts = normalized_conflicts
+        # ---------------------------------------------------
+        # STEP 4 — Generate SUMMARY (CHUNKED FOR PHI-3)
+        # ---------------------------------------------------
+        def extract_llm_text(llm_out):
+            if not llm_out:
+                return ""
+            if isinstance(llm_out, dict):
+                if "choices" in llm_out and llm_out["choices"]:
+                    return (llm_out["choices"][0].get("text") or "").strip()
+                if "text" in llm_out:
+                    return llm_out["text"].strip()
+                return ""
+            if hasattr(llm_out, "text"):
+                return str(llm_out.text).strip()
+            if isinstance(llm_out, str):
+                return llm_out.strip()
+            return str(llm_out)
+        # ---------- CHUNK TRANSCRIPT FOR PHI-3 ----------
+        MAX_CHARS = 1200  # safe for Q4 model
+        chunks = [speaker_transcript[i:i+MAX_CHARS] for i in range(0, len(speaker_transcript), MAX_CHARS)]
+
+        chunk_summaries = []
+
+        for chunk in chunks:
             prompt = f"""
-You are an AI assistant. 
-
-1️⃣ Summarize the following meeting transcript in 3-4 lines under 'Meeting Highlight'.
-2️⃣ Extract all Key Decisions as a list under 'Key Decisions'. Include speaker attribution when possible.
-
-Transcript:
-{chunk}
-
-Return output as JSON with keys: 'summary' and 'key_decisions'.
-"""
-            out = llm(prompt=prompt, max_tokens=1024, temperature=0.3)
-            text = ""
-            if isinstance(out, dict):
-                text = out.get("choices", [{}])[0].get("text", "") if out.get("choices") else out.get("text", "") or ""
-            elif isinstance(out, str):
-                text = out
-            text = (text or "").strip()
+        Summarize this part of the meeting into 2 concise sentences:
+        {chunk}
+        """
             try:
-                parsed = json.loads(text)
-                summaries.append(parsed.get("summary", ""))
-                chunk_decisions = parsed.get("key_decisions", [])
-                if isinstance(chunk_decisions, list):
-                    decisions.extend(chunk_decisions)
-            except Exception:
-                # fallback if parsing fails
-                if text:
-                    summaries.append(text)
-        final_summary = " ".join(summaries).strip()
-        # Step 4: Extract tasks and conflicts for MoM generation
-        print("Extracting tasks and conflicts for MoM...")
-        # Process transcript to extract tasks and conflicts
-        process_result = process_transcript_internal(speaker_transcript, llm)
-        extracted_tasks = process_result.get("tasks", [])
-        extracted_conflicts = process_result.get("conflicts", [])
-        # Save tasks and conflicts to database with meeting_id (will be linked after meeting is created)
-        # Store them temporarily to link after meeting creation
-        temp_tasks = []
-        temp_conflicts = []
-        for task_data in extracted_tasks:
-            temp_tasks.append({
-                "person": task_data.get("assigned_to", "Unassigned"),
-                "task": task_data.get("task_name", "Untitled Task"),
-                "deadline": task_data.get("due_date", "Not Mentioned"),
-                "status": task_data.get("status", "Pending"),
-                "notes": ""
-            })
-        for conflict_data in extracted_conflicts:
-            participants_str = ", ".join(conflict_data.get("participants", [])) if isinstance(conflict_data.get("participants"), list) else str(conflict_data.get("participants", ""))
-            stance_str = json.dumps(conflict_data.get("stance", "")) if isinstance(conflict_data.get("stance", dict)) else str(conflict_data.get("stance", ""))
-            temp_conflicts.append({
-                "issue": conflict_data.get("issue", "") or "",
-                "raised_by": conflict_data.get("raised_by", "") or "",
-                "resolution": "",
-                "severity": conflict_data.get("severity", "Medium"),
-                "participants": participants_str,
-                "stance": stance_str,
-                "topic": conflict_data.get("topic", "")
-            })
-        # -----------------------------
-        # Persist the summary and key decisions into the Meeting DB
-        # -----------------------------
-        try:
-            meeting_id = None
-            # 1) Check form data
-            if request.form and request.form.get("meeting_id"):
-                try:
-                    meeting_id = int(request.form.get("meeting_id"))
-                except Exception:
-                    meeting_id = None
-            # 2) Check JSON body or query params
-            if meeting_id is None:
-                payload = request.get_json(silent=True) or {}
-                mid = payload.get("meeting_id") or request.args.get("meeting_id")
-                if mid:
-                    try:
-                        meeting_id = int(mid)
-                    except Exception:
-                        meeting_id = None
-            # Get meeting details from form or JSON
-            form_data = request.form if request.form else {}
-            json_data = request.get_json(silent=True) or {}
-            all_data = {**form_data, **json_data}
-            # Parse date if provided
-            meeting_date = date.today()
-            if all_data.get("date"):
-                try:
-                    if isinstance(all_data["date"], str):
-                        meeting_date = datetime.strptime(all_data["date"], "%Y-%m-%d").date()
-                    else:
-                        meeting_date = all_data["date"]
-                except:
-                    meeting_date = date.today()
-            # Fetch existing meeting or create new
-            if meeting_id:
-                meeting = Meeting.query.get(meeting_id)
-                if meeting:
-                    meeting.summary = final_summary
-                    meeting.key_decisions = decisions if isinstance(decisions, list) else []
-                    meeting.date = meeting.date or meeting_date
-                    meeting.transcript_segments = normalized_segments
-                    meeting.speakers = ", ".join(unique_speakers)
-                    # Update other fields if provided
-                    if all_data.get("title"):
-                        meeting.title = all_data["title"]
-                    if all_data.get("location"):
-                        meeting.location = all_data["location"]
-                    if all_data.get("host"):
-                        meeting.host = all_data["host"]
-                    if all_data.get("presentees"):
-                        meeting.presentees = all_data["presentees"]
-                    if all_data.get("absentees"):
-                        meeting.absentees = all_data["absentees"]
-                    if all_data.get("agenda"):
-                        meeting.agenda = all_data["agenda"]
-                    if all_data.get("start_time"):
-                        meeting.start_time = all_data["start_time"]
-                    if all_data.get("end_time"):
-                        meeting.end_time = all_data["end_time"]
-                else:
-                    # Meeting ID provided but not found → create new
-                    new_title = all_data.get("title") or f"Meeting {datetime.now(timezone.utc).isoformat()}"
-                    meeting = Meeting(
-                        title=new_title,
-                        summary=final_summary,
-                        key_decisions=decisions if isinstance(decisions, list) else [],
-                        date=meeting_date,
-                        location=all_data.get("location", ""),
-                        host=all_data.get("host", ""),
-                        presentees=all_data.get("presentees", ""),
-                        absentees=all_data.get("absentees", ""),
-                        agenda=all_data.get("agenda", ""),
-                        start_time=all_data.get("start_time", ""),
-                        end_time=all_data.get("end_time", ""),
-                        transcript_segments=normalized_segments,
-                        speakers=", ".join(unique_speakers)
-                    )
-                    db.session.add(meeting)
-            else:
-                # No meeting_id → create new meeting
-                new_title = all_data.get("title") or f"Meeting {datetime.now(timezone.utc).isoformat()}"
-                meeting = Meeting(
-                    title=new_title,
-                    summary=final_summary,
-                    key_decisions=decisions if isinstance(decisions, list) else [],
-                    date=meeting_date,
-                    location=all_data.get("location", ""),
-                    host=all_data.get("host", ""),
-                    presentees=all_data.get("presentees", ""),
-                    absentees=all_data.get("absentees", ""),
-                    agenda=all_data.get("agenda", ""),
-                    start_time=all_data.get("start_time", ""),
-                    end_time=all_data.get("end_time", ""),
-                    transcript_segments=normalized_segments,
-                    speakers=", ".join(unique_speakers)
-                )
-                db.session.add(meeting)
-            db.session.commit()
-            saved_meeting_id = meeting.id if meeting else None
-            # Step 5: Save tasks and conflicts with meeting_id
-            if saved_meeting_id:
-                for task_data in temp_tasks:
-                    task = Task(
-                        person=task_data["person"],
-                        task=task_data["task"],
-                        deadline=task_data["deadline"],
-                        status=task_data["status"],
-                        notes=task_data["notes"],
-                        meeting_id=saved_meeting_id
-                    )
-                    db.session.add(task)
-                for conflict_data in temp_conflicts:
-                    conflict = Conflict(
-                        issue=conflict_data["issue"],
-                        raised_by=conflict_data["raised_by"],
-                        resolution=conflict_data["resolution"],
-                        severity=conflict_data["severity"],
-                        participants=conflict_data["participants"],
-                        stance=conflict_data["stance"],
-                        topic=conflict_data["topic"],
-                        meeting_id=saved_meeting_id
-                    )
-                    db.session.add(conflict)
-                db.session.commit()
-            # Step 6: Auto-generate MoM document
-            mom_file_path = None
-            mom_download_url = None
-            if saved_meeting_id:
-                try:
-                    print("Auto-generating MoM document...")
-                    from utils.mom_generator import generate_mom_document
-                    # Get tasks and conflicts for this meeting
-                    meeting_tasks = Task.query.filter_by(meeting_id=saved_meeting_id).all()
-                    meeting_conflicts = Conflict.query.filter_by(meeting_id=saved_meeting_id).all()
-                    # Generate MoM
-                    mom_file_path = generate_mom_document(
-                        meeting_data=meeting,
-                        tasks=meeting_tasks,
-                        conflicts=meeting_conflicts,
-                        transcript_segments=normalized_segments
-                    )
-                    # Update meeting with MoM file path
-                    meeting.mom_file_path = mom_file_path
-                    db.session.commit()
-                    # Generate download URL
-                    mom_filename = os.path.basename(mom_file_path)
-                    mom_download_url = f"/api/download/{mom_filename}"
-                    print(f"MoM generated successfully: {mom_file_path}")
-                except Exception as e:
-                    print(f"Warning: Failed to generate MoM document: {e}")
-                    traceback.print_exc()
-        except Exception as e:
-            print("Warning: failed to save summary/key_decisions to DB:", e)
-            traceback.print_exc()
-            saved_meeting_id = None
-            mom_file_path = None
-            mom_download_url = None
-        response_data = {
+                out = llm(prompt=prompt, max_tokens=180, temperature=0.3)
+                part_summary = extract_llm_text(out)
+                if part_summary:
+                    chunk_summaries.append(part_summary)
+            except Exception as e:
+                print("Chunk summary failed:", e)
+        # ---------- Merge partial summaries ----------
+        summary_text = " ".join(chunk_summaries).strip()
+        # If still empty → fallback logic
+        if not summary_text:
+            print("LLM returned empty summary — building fallback summary.")
+            fallback = ""
+            if full_transcript:
+                sentences = re.split(r'(?<=[.!?])\s+', full_transcript.strip())
+                fallback = " ".join(sentences[:4]).strip()
+            if not fallback and extracted_tasks:
+                fallback = "Action items assigned: " + ", ".join([t.get("task_name","") for t in extracted_tasks[:3]])
+            if not fallback and extracted_conflicts:
+                fallback = "Conflicts were raised regarding " + ", ".join([c.get("issue","") for c in extracted_conflicts[:3]])
+            if not fallback:
+                fallback = "Summary unavailable — transcript and extracted content are attached."
+
+            summary_text = fallback
+        summary = summary_text.strip()
+
+        # ---------------------------------------------------
+        # STEP 5 — Create / Update Meeting in Database
+        # ---------------------------------------------------
+        form_data = request.form if request.form else {}
+        json_data = request.get_json(silent=True) or {}
+        all_data = {**form_data, **json_data}
+        # Always create a NEW meeting for every audio upload
+        meeting = create_meeting_from_data(all_data, summary, normalized_segments, unique_speakers)
+
+        # Ensure summary is saved
+        meeting.summary = summary
+        db.session.commit()
+
+        # ---------------------------------------------------
+        # STEP 6 — Store Tasks and Conflicts in Database
+        # ---------------------------------------------------
+        saved_tasks = []
+        for t in extracted_tasks:
+            task = Task(
+                person=t["assigned_to"],
+                task=t["task_name"],
+                deadline=t["due_date"],
+                status=t["status"],
+                notes="",
+                meeting_id=meeting.id
+            )
+            db.session.add(task)
+            saved_tasks.append(task)
+
+        saved_conflicts = []
+        for c in extracted_conflicts:
+            conflict = Conflict(
+                issue=c["issue"],
+                raised_by=c["raised_by"],
+                severity=c["severity"],
+                participants=", ".join(c["participants"]),
+                stance=str(c["stance"]),
+                resolution=c["resolution"],
+                topic=c["topic"],
+                meeting_id=meeting.id
+            )
+            db.session.add(conflict)
+            saved_conflicts.append(conflict)
+
+        db.session.commit()
+
+        # ---------------------------------------------------
+        # STEP 7 — Generate MOM USING SAVED DB VALUES
+        # ---------------------------------------------------
+        from utils.mom_generator import generate_mom_document
+
+        meeting_tasks = Task.query.filter_by(meeting_id=meeting.id).all()
+        meeting_conflicts = Conflict.query.filter_by(meeting_id=meeting.id).all()
+
+        mom_file_path = generate_mom_document(
+            meeting_data=meeting,
+            tasks=meeting_tasks,
+            conflicts=meeting_conflicts,
+            transcript_segments=None  # Only summary is used
+        )
+
+        meeting.mom_file_path = mom_file_path
+        db.session.commit()
+
+        # ---------------------------------------------------
+        # STEP 8 — Return structured response
+        # ---------------------------------------------------
+        return jsonify({
             "transcript": full_transcript,
-            "meeting_highlight": final_summary,
-            "key_decisions": decisions,
-            "meeting_id": saved_meeting_id,
+            "full_text": full_transcript,
             "segments": normalized_segments,
-            "speakers": unique_speakers
-        }
-        if mom_download_url:
-            response_data["mom_file"] = {
-                "path": mom_file_path,
-                "download_url": mom_download_url,
-                "filename": os.path.basename(mom_file_path) if mom_file_path else None
+            "speakers": unique_speakers,
+            "summary": summary,
+            # frontend expects these names in your code — keep them consistent
+            "extracted_tasks": [task_to_dict(t) for t in meeting_tasks],
+            "extracted_conflicts": [conflict_to_dict(c) for c in meeting_conflicts],
+            "meeting_id": meeting.id,
+            "mom_file": {
+                "filename": os.path.basename(mom_file_path),
+                "download_url": f"/api/download/{os.path.basename(mom_file_path)}"
             }
-        return jsonify(response_data)
+        })
+
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
     finally:
         if audio_path and os.path.exists(audio_path):
-            try:
-                os.remove(audio_path)
-            except Exception:
-                pass
+            os.remove(audio_path)
+
+# # -----------------------------
+# # Meeting Summary + Key Decisions Endpoint (POST)
+# # -----------------------------
+# @api_bp.route("/summary", methods=["POST"])
+# def summary():
+#     if "audio" not in request.files:
+#         return jsonify({"error": "audio file missing"}), 400
+#     audio_file = request.files["audio"]
+#     if not audio_file.filename:
+#         return jsonify({"error": "empty filename"}), 400
+#     audio_path = None
+#     try:
+#         # Step 1: Save temp audio file
+#         with NamedTemporaryFile(delete=False, suffix=os.path.splitext(secure_filename(audio_file.filename))[1]) as tmp:
+#             audio_path = tmp.name
+#             audio_file.save(audio_path)
+#         # Step 2: Transcribe audio with WhisperX (speaker diarization)
+#         print("Transcribing with Faster-Whisper...")
+#         result = transcribe_audio_faster_whisper(audio_path)
+#         # Normalize segments (keep your existing behavior)
+#         from utils.temporal_normalization import normalize_temporal_segments
+#         normalized_segments = normalize_temporal_segments(
+#             result["segments"],
+#             merge_threshold=0.5
+#         )
+#         # Build labeled transcript for LLM
+#         speaker_transcript = ""
+#         for seg in normalized_segments:
+#             speaker = seg.get("speaker", "UNKNOWN")
+#             text = seg.get("text", "")
+#             speaker_transcript += f"{speaker}: {text}\n"
+#         full_transcript = result["full_text"]
+#         unique_speakers = list(set(seg.get("speaker", "UNKNOWN") for seg in normalized_segments
+#         ))
+#         # Step 3: Generate summary and key decisions using Phi-3
+#         llm = get_phi3_model()
+#         MAX_CHARS = 3000
+#         def chunk_text(text, max_chars=MAX_CHARS):
+#             return [text[i:i+max_chars] for i in range(0, len(text), max_chars)]
+#         transcript_chunks = chunk_text(speaker_transcript)
+#         summaries, decisions = [], []
+#         for chunk in transcript_chunks:
+#             prompt = f"""
+# You are an AI assistant. 
+
+# 1️⃣ Summarize the following meeting transcript in 3-4 lines under 'Meeting Highlight'.
+# 2️⃣ Extract all Key Decisions as a list under 'Key Decisions'. Include speaker attribution when possible.
+
+# Transcript:
+# {chunk}
+
+# Return output as JSON with keys: 'summary' and 'key_decisions'.
+# """
+#             out = llm(prompt=prompt, max_tokens=1024, temperature=0.3)
+#             text = ""
+#             if isinstance(out, dict):
+#                 text = out.get("choices", [{}])[0].get("text", "") if out.get("choices") else out.get("text", "") or ""
+#             elif isinstance(out, str):
+#                 text = out
+#             text = (text or "").strip()
+#             try:
+#                 parsed = json.loads(text)
+#                 summaries.append(parsed.get("summary", ""))
+#                 chunk_decisions = parsed.get("key_decisions", [])
+#                 if isinstance(chunk_decisions, list):
+#                     decisions.extend(chunk_decisions)
+#             except Exception:
+#                 # fallback if parsing fails
+#                 if text:
+#                     summaries.append(text)
+#         final_summary = " ".join(summaries).strip()
+#         # Step 4: Extract tasks and conflicts for MoM generation
+#         print("Extracting tasks and conflicts for MoM...")
+#         # Process transcript to extract tasks and conflicts
+#         process_result = process_transcript_internal(speaker_transcript, llm)
+#         extracted_tasks = process_result.get("tasks", [])
+#         extracted_conflicts = process_result.get("conflicts", [])
+#         # Save tasks and conflicts to database with meeting_id (will be linked after meeting is created)
+#         # Store them temporarily to link after meeting creation
+#         temp_tasks = []
+#         temp_conflicts = []
+#         for task_data in extracted_tasks:
+#             temp_tasks.append({
+#                 "person": task_data.get("assigned_to", "Unassigned"),
+#                 "task": task_data.get("task_name", "Untitled Task"),
+#                 "deadline": task_data.get("due_date", "Not Mentioned"),
+#                 "status": task_data.get("status", "Pending"),
+#                 "notes": ""
+#             })
+#         for conflict_data in extracted_conflicts:
+#             participants_str = ", ".join(conflict_data.get("participants", [])) if isinstance(conflict_data.get("participants"), list) else str(conflict_data.get("participants", ""))
+#             stance_str = json.dumps(conflict_data.get("stance", "")) if isinstance(conflict_data.get("stance", dict)) else str(conflict_data.get("stance", ""))
+#             temp_conflicts.append({
+#                 "issue": conflict_data.get("issue", "") or "",
+#                 "raised_by": conflict_data.get("raised_by", "") or "",
+#                 "resolution": "",
+#                 "severity": conflict_data.get("severity", "Medium"),
+#                 "participants": participants_str,
+#                 "stance": stance_str,
+#                 "topic": conflict_data.get("topic", "")
+#             })
+#         # -----------------------------
+#         # Persist the summary and key decisions into the Meeting DB
+#         # -----------------------------
+#         try:
+#             meeting_id = None
+#             # 1) Check form data
+#             if request.form and request.form.get("meeting_id"):
+#                 try:
+#                     meeting_id = int(request.form.get("meeting_id"))
+#                 except Exception:
+#                     meeting_id = None
+#             # 2) Check JSON body or query params
+#             if meeting_id is None:
+#                 payload = request.get_json(silent=True) or {}
+#                 mid = payload.get("meeting_id") or request.args.get("meeting_id")
+#                 if mid:
+#                     try:
+#                         meeting_id = int(mid)
+#                     except Exception:
+#                         meeting_id = None
+#             # Get meeting details from form or JSON
+#             form_data = request.form if request.form else {}
+#             json_data = request.get_json(silent=True) or {}
+#             all_data = {**form_data, **json_data}
+#             # Parse date if provided
+#             meeting_date = date.today()
+#             if all_data.get("date"):
+#                 try:
+#                     if isinstance(all_data["date"], str):
+#                         meeting_date = datetime.strptime(all_data["date"], "%Y-%m-%d").date()
+#                     else:
+#                         meeting_date = all_data["date"]
+#                 except:
+#                     meeting_date = date.today()
+#             # Fetch existing meeting or create new
+#             if meeting_id:
+#                 meeting = Meeting.query.get(meeting_id)
+#                 if meeting:
+#                     meeting.summary = final_summary
+#                     meeting.key_decisions = decisions if isinstance(decisions, list) else []
+#                     meeting.date = meeting.date or meeting_date
+#                     meeting.transcript_segments = normalized_segments
+#                     meeting.speakers = ", ".join(unique_speakers)
+#                     # Update other fields if provided
+#                     if all_data.get("title"):
+#                         meeting.title = all_data["title"]
+#                     if all_data.get("location"):
+#                         meeting.location = all_data["location"]
+#                     if all_data.get("host"):
+#                         meeting.host = all_data["host"]
+#                     if all_data.get("presentees"):
+#                         meeting.presentees = all_data["presentees"]
+#                     if all_data.get("absentees"):
+#                         meeting.absentees = all_data["absentees"]
+#                     if all_data.get("agenda"):
+#                         meeting.agenda = all_data["agenda"]
+#                     if all_data.get("start_time"):
+#                         meeting.start_time = all_data["start_time"]
+#                     if all_data.get("end_time"):
+#                         meeting.end_time = all_data["end_time"]
+#                 else:
+#                     # Meeting ID provided but not found → create new
+#                     new_title = all_data.get("title") or f"Meeting {datetime.now(timezone.utc).isoformat()}"
+#                     meeting = Meeting(
+#                         title=new_title,
+#                         summary=final_summary,
+#                         key_decisions=decisions if isinstance(decisions, list) else [],
+#                         date=meeting_date,
+#                         location=all_data.get("location", ""),
+#                         host=all_data.get("host", ""),
+#                         presentees=all_data.get("presentees", ""),
+#                         absentees=all_data.get("absentees", ""),
+#                         agenda=all_data.get("agenda", ""),
+#                         start_time=all_data.get("start_time", ""),
+#                         end_time=all_data.get("end_time", ""),
+#                         transcript_segments=normalized_segments,
+#                         speakers=", ".join(unique_speakers)
+#                     )
+#                     db.session.add(meeting)
+#             else:
+#                 # No meeting_id → create new meeting
+#                 new_title = all_data.get("title") or f"Meeting {datetime.now(timezone.utc).isoformat()}"
+#                 meeting = Meeting(
+#                     title=new_title,
+#                     summary=final_summary,
+#                     key_decisions=decisions if isinstance(decisions, list) else [],
+#                     date=meeting_date,
+#                     location=all_data.get("location", ""),
+#                     host=all_data.get("host", ""),
+#                     presentees=all_data.get("presentees", ""),
+#                     absentees=all_data.get("absentees", ""),
+#                     agenda=all_data.get("agenda", ""),
+#                     start_time=all_data.get("start_time", ""),
+#                     end_time=all_data.get("end_time", ""),
+#                     transcript_segments=normalized_segments,
+#                     speakers=", ".join(unique_speakers)
+#                 )
+#                 db.session.add(meeting)
+#             db.session.commit()
+#             saved_meeting_id = meeting.id if meeting else None
+#             # Step 5: Save tasks and conflicts with meeting_id
+#             if saved_meeting_id:
+#                 for task_data in temp_tasks:
+#                     task = Task(
+#                         person=task_data["person"],
+#                         task=task_data["task"],
+#                         deadline=task_data["deadline"],
+#                         status=task_data["status"],
+#                         notes=task_data["notes"],
+#                         meeting_id=saved_meeting_id
+#                     )
+#                     db.session.add(task)
+#                 for conflict_data in temp_conflicts:
+#                     conflict = Conflict(
+#                         issue=conflict_data["issue"],
+#                         raised_by=conflict_data["raised_by"],
+#                         resolution=conflict_data["resolution"],
+#                         severity=conflict_data["severity"],
+#                         participants=conflict_data["participants"],
+#                         stance=conflict_data["stance"],
+#                         topic=conflict_data["topic"],
+#                         meeting_id=saved_meeting_id
+#                     )
+#                     db.session.add(conflict)
+#                 db.session.commit()
+#             # Step 6: Auto-generate MoM document
+#             mom_file_path = None
+#             mom_download_url = None
+#             if saved_meeting_id:
+#                 try:
+#                     print("Auto-generating MoM document...")
+#                     from utils.mom_generator import generate_mom_document
+#                     # Get tasks and conflicts for this meeting
+#                     meeting_tasks = Task.query.filter_by(meeting_id=saved_meeting_id).all()
+#                     meeting_conflicts = Conflict.query.filter_by(meeting_id=saved_meeting_id).all()
+#                     # Generate MoM
+#                     mom_file_path = generate_mom_document(
+#                         meeting_data=meeting,
+#                         tasks=meeting_tasks,
+#                         conflicts=meeting_conflicts,
+#                         transcript_segments=normalized_segments
+#                     )
+#                     # Update meeting with MoM file path
+#                     meeting.mom_file_path = mom_file_path
+#                     db.session.commit()
+#                     # Generate download URL
+#                     mom_filename = os.path.basename(mom_file_path)
+#                     mom_download_url = f"/api/download/{mom_filename}"
+#                     print(f"MoM generated successfully: {mom_file_path}")
+#                 except Exception as e:
+#                     print(f"Warning: Failed to generate MoM document: {e}")
+#                     traceback.print_exc()
+#         except Exception as e:
+#             print("Warning: failed to save summary/key_decisions to DB:", e)
+#             traceback.print_exc()
+#             saved_meeting_id = None
+#             mom_file_path = None
+#             mom_download_url = None
+#         response_data = {
+#             "transcript": full_transcript,
+#             "meeting_highlight": final_summary,
+#             "key_decisions": decisions,
+#             "meeting_id": saved_meeting_id,
+#             "segments": normalized_segments,
+#             "speakers": unique_speakers
+#         }
+#         if mom_download_url:
+#             response_data["mom_file"] = {
+#                 "path": mom_file_path,
+#                 "download_url": mom_download_url,
+#                 "filename": os.path.basename(mom_file_path) if mom_file_path else None
+#             }
+#         return jsonify(response_data)
+#     except Exception as e:
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+#     finally:
+#         if audio_path and os.path.exists(audio_path):
+#             try:
+#                 os.remove(audio_path)
+#             except Exception:
+#                 pass
 
 # ------------------------------------------------------------------
 # 🔽🔽🔽 GET /api/summary (aggregated highlights & decisions)

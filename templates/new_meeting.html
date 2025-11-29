@@ -1,82 +1,126 @@
 {% extends "base.html" %}
 {% block content %}
+
 <section class="page-wrap">
-  <div class="page-header">
-    <h1>🆕 New Meeting</h1>
-    <p class="muted">Create a new meeting — fill the details and generate the report.</p>
+
+  <!-- Header -->
+  <div class="p-6 rounded-3xl bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-xl mb-8">
+    <h1 class="text-3xl font-bold">🆕 New Meeting</h1>
+    <p class="opacity-90 mt-1">Create a new meeting — fill the details and generate the report.</p>
   </div>
 
-  <div class="card main-card">
-    <!-- Form grid -->
+  <!-- Main Card -->
+  <div class="bg-white/80 backdrop-blur-xl shadow-2xl rounded-3xl p-10 border border-gray-200">
+
     <form method="post" class="meeting-form">
-      <div class="form-grid">
-        <!-- Row 1: Meeting name (left) | Objective (right - full width textarea) -->
-        <div class="form-field">
-          <label class="form-label">Meeting Name</label>
-          <input name="name" placeholder="Name" />
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+        <!-- Meeting Name -->
+        <div>
+          <label class="form-label font-semibold text-gray-700">Meeting Name</label>
+          <input name="name" placeholder="Name"
+                 class="w-full mt-2 p-3 bg-gray-100 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none"/>
         </div>
 
-        <div class="form-field full">
-          <label class="form-label">Objective</label>
-          <textarea name="objective" rows="3" placeholder="Write the meeting objective..."></textarea>
+        <!-- Objective -->
+        <div class="md:col-span-2">
+          <label class="form-label font-semibold text-gray-700">Objective</label>
+          <textarea name="objective" rows="3" placeholder="Write the meeting objective..."
+                    class="w-full mt-2 p-3 bg-gray-100 rounded-xl focus:ring-2 focus:ring-purple-400 outline-none"></textarea>
         </div>
 
-        <!-- Row 2: Location | Date & Time -->
-        <div class="form-field">
-          <label class="form-label">Location</label>
-          <input name="location" placeholder="e.g. Conference Room A" />
+        <!-- Location -->
+        <div>
+          <label class="form-label font-semibold text-gray-700">Location</label>
+          <input name="location" placeholder="e.g. Conference Room A"
+                 class="w-full mt-2 p-3 bg-gray-100 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none"/>
         </div>
 
-        <div class="form-field">
-          <label class="form-label">Date & Time</label>
-          <input type="datetime-local" name="datetime" />
+        <!-- Date & Time -->
+        <div>
+          <label class="form-label font-semibold text-gray-700">Date & Time</label>
+          <input type="datetime-local" name="datetime"
+                 class="w-full mt-2 p-3 bg-gray-100 rounded-xl focus:ring-2 focus:ring-purple-400 outline-none"/>
         </div>
 
-        <!-- Row 3: Host | Presentees -->
-        <div class="form-field">
-          <label class="form-label">Host</label>
-          <input name="host" placeholder="Host name" />
+        <!-- Host -->
+        <div>
+          <label class="form-label font-semibold text-gray-700">Host</label>
+          <input name="host" placeholder="Host name"
+                 class="w-full mt-2 p-3 bg-gray-100 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none"/>
         </div>
 
-        <div class="form-field">
-          <label class="form-label">Presentees (comma separated)</label>
-          <input name="presentees" placeholder="Alice, Bob, Charlie" />
+        <!-- Presentees -->
+        <div>
+          <label class="form-label font-semibold text-gray-700">Presentees (comma separated)</label>
+          <input name="presentees" placeholder="Alice, Bob, Charlie"
+                 class="w-full mt-2 p-3 bg-gray-100 rounded-xl focus:ring-2 focus:ring-purple-400 outline-none"/>
         </div>
 
-        <!-- Row 4: Absentees | Agenda Items (textarea spans right column) -->
-        <div class="form-field">
-          <label class="form-label">Absentees (comma separated)</label>
-          <input name="absentees" placeholder="If any" />
+        <!-- Absentees -->
+        <div>
+          <label class="form-label font-semibold text-gray-700">Absentees (comma separated)</label>
+          <input name="absentees" placeholder="If any"
+                 class="w-full mt-2 p-3 bg-gray-100 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none"/>
         </div>
 
-        <div class="form-field full">
-          <label class="form-label">Agenda Items</label>
-          <textarea name="agenda" rows="4" placeholder="List agenda items, one per line"></textarea>
+        <!-- Agenda -->
+        <div class="md:col-span-2">
+          <label class="form-label font-semibold text-gray-700">Agenda Items</label>
+          <textarea name="agenda" rows="4" placeholder="List agenda items, one per line"
+                    class="w-full mt-2 p-3 bg-gray-100 rounded-xl focus:ring-2 focus:ring-purple-400 outline-none"></textarea>
         </div>
 
-        <!-- Row 5: Adjournment time (left) and file upload (right) -->
-        <div class="form-field">
-          <label class="form-label">Adjournment Time</label>
-          <input name="adj_time" placeholder="e.g. 21:00" />
+        <!-- Adjournment time -->
+        <div>
+          <label class="form-label font-semibold text-gray-700">Adjournment Time</label>
+          <input name="adj_time" placeholder="e.g. 21:00"
+                 class="w-full mt-2 p-3 bg-gray-100 rounded-xl focus:ring-2 focus:ring-blue-400 outline-none"/>
         </div>
 
-        <div class="form-field">
-          <label class="form-label">Upload Audio (optional)</label>
-          <input type="file" name="audio" disabled title="Audio processing not enabled in demo">
+        <!-- File Upload -->
+        <div>
+          <label class="form-label font-semibold text-gray-700">Upload Audio (optional)</label>
+          <input type="file" name="audio" disabled
+                 class="mt-2 block w-full text-gray-700 file:mr-4 file:py-2 file:px-4 file:border-0 
+                 file:text-sm file:font-semibold file:bg-blue-600 file:text-white rounded-xl cursor-pointer 
+                 hover:file:bg-blue-700"
+                 title="Audio processing not enabled in demo">
         </div>
+
       </div>
 
-      <!-- Action row -->
-      <div class="action-row">
-        <button class="btn primary large" type="submit">Save Meeting</button>
-        <button type="button" class="btn ghost large" id="generateReportBtn">Generate Report</button>
-        <a class="btn ghost large" href="{{ url_for('download_mom') }}">Download MoM (.docx)</a>
+      <!-- Actions -->
+      <div class="flex flex-wrap gap-4 mt-10">
+
+        <button class="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white 
+                       rounded-2xl font-semibold shadow-lg hover:opacity-90 transition"
+                type="submit">
+          Save Meeting
+        </button>
+
+        <button type="button"
+                class="px-6 py-3 bg-green-600 text-white rounded-2xl font-semibold 
+                       shadow-lg hover:bg-green-700 transition"
+                id="generateReportBtn">
+          Generate Report
+        </button>
+
+        <a class="px-6 py-3 bg-gray-200 text-gray-700 rounded-2xl font-semibold 
+                  shadow hover:bg-gray-300 transition"
+           href="{{ url_for('download_mom') }}">
+          Download MoM (.docx)
+        </a>
       </div>
 
-      <p class="muted small" style="margin-top:14px;">
+      <p class="text-sm text-gray-500 mt-4">
         Once you click "Generate Report" the Dashboard panels will be populated (demo).
       </p>
+
     </form>
+
   </div>
+
 </section>
+
 {% endblock %}
